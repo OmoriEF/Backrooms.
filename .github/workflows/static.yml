@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Backrooms Lite Site</title>
+    <style>
+        * { 
+            margin: 0; padding: 0; box-sizing: border-box; 
+            touch-action: none; user-select: none; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        body { background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; color: #ff0; }
+        canvas { display: block; width: 100vw; height: 100vh; filter: sepia(0.5) contrast(1.2) brightness(0.7); display: none; }
+
+        /* --- MENUS --- */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 100; background: #1a1a05; text-align: center; padding: 20px;
+        }
+
+        #menu-screen h1 { font-size: clamp(24px, 8vw, 45px); margin-bottom: 30px; text-shadow: 3px 3px #000; }
+        
+        .selector-box { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+        .btn {
+            padding: 15px 30px; background: #ff0; color: #000; 
+            font-weight: bold; border: 4px solid #880; cursor: pointer; font-size: 18px;
+        }
+        .btn:active { transform: scale(0.95); }
+
+        /* --- ALERTAS --- */
+        #troll-msg { 
+            display: none; color: #f00; font-weight: bold; margin-top: 20px; 
+            background: #000; padding: 10px; border: 2px solid #f00;
+        }
+
+        /* --- CONTROLES MOBILE --- */
+        .joy-base {
+            position: absolute; bottom: 50px; width: 120px; height: 120px;
+            background: rgba(255, 255, 0, 0.1); border-radius: 50%;
+            border: 2px solid rgba(255, 255, 0, 0.3); z-index: 10; display: none;
+        }
+        .joy-stick {
+            position: absolute; top: 50%; left: 50%; width: 45px; height: 45px;
+            background: #ff0; border-radius: 50%; transform: translate(-50%, -50%);
+        }
+        #joy-l { left: 30px; } #joy-r { right: 30px; }
+
+        #vhs {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, transparent 1px);
+            pointer-events: none; z-index: 20; display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="menu-screen" class="overlay">
+        <h1>BACKROOMS<br>LITE SITE</h1>
+        <p style="margin-bottom: 20px;">ESCOLHA SEU DISPOSITIVO:</p>
+        <div class="selector-box">
+            <button class="btn" onclick="checkDevice('pc')">COMPUTADOR / PC</button>
+            <button class="btn" onclick="checkDevice('mobile')">CELULAR / TOUCH</button>
+        </div>
+        <div id="troll-msg">slk Man nos sabemos que tu não tem um computador</div>
+    </div>
+
+    <div id="credits-screen" class="overlay" style="display: none; background: #000;">
+        <p>INICIALIZANDO...</p>
+        <br>
+        <h2 style="font-size: 28px;">CRIADO POR:<br>EMANUEL E CAUAN</h2>
+    </div>
+
+    <div id="vhs"></div>
+    <canvas id="screen"></canvas>
+    
+    <div id="joy-l" class="joy-base"><div id="stick-l" class="joy-stick"></div></div>
+    <div id="joy-r" class="joy-base"><div id="stick-r" class="joy-stick"></div></div>
+
+    <script>
+        const canvas = document.getElementById('screen');
+        const ctx = canvas.getContext('2d');
+        let gameRunning = false;
+        let isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        let controlMode = 'pc';
+
+        function checkDevice(choice) {
+            const troll = document.getElementById('troll-msg');
+            
+            if (choice === 'pc' && isMobileDevice) {
+                troll.style.display = 'block';
+                // Esconde a opção de PC após o mico kkk
+                setTimeout(() => {
+                    troll.style.display = 'none';
+                    document.querySelectorAll('.btn')[0].style.display = 'none';
+                }, 3000);
+                return;
+            }
+
+            controlMode = choice;
+            startCredits();
+        }
+
+        function startCredits() {
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('credits-screen').style.display = 'flex';
+            
+            setTimeout(() => {
+                document.getElementById('credits-screen').style.display = 'none';
+                document.getElementById('vhs').style.display = 'block';
+                canvas.style.display = 'block';
+                
+                if (controlMode === 'mobile') {
+                    document.getElementById('joy-l').style.display = 'block';
+                    document.getElementById('joy-r').style.display = 'block';
+                } else {
+                    // Lock Pointer para PC
+                    canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+                    canvas.addEventListener('click', () => canvas.requestPointerLock());
+                }
+
+                gameRunning = true;
+                initInput();
+                loop();
+            }, 3000);
+        }
+
+        // --- MOTOR 3D ---
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const world = [
+            [1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,1,0,0,1],
+            [1,1,1,1,0,1,0,1,0,1,1],
+            [1,0,0,0,0,1,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1]
+        ];
+        const player = { x: 1.5, y: 1.5, dir: 0, speed: 0, strafe: 0, rot: 0 };
+
+        // --- ENTRADAS (TECLADO + MOUSE OU JOYSTICK) ---
+        const keys = {};
+        function initInput() {
+            if (controlMode === 'pc') {
+                window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+                window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+                window.addEventListener('mousemove', e => {
+                    if (document.pointerLockElement === canvas) player.dir += e.movementX * 0.003;
+                });
+            } else {
+                setupJoy('joy-l', 'stick-l', (x, y) => { player.speed = -y * 0.08; player.strafe = x * 0.08; }, () => { player.speed = 0; player.strafe = 0; });
+                setupJoy('joy-r', 'stick-r', (x, y) => { player.rot = x * 0.06; }, () => { player.rot = 0; });
+            }
+        }
+
+        function setupJoy(containerId, stickId, onUpdate, onEnd) {
+            const container = document.getElementById(containerId);
+            const stick = document.getElementById(stickId);
+            const handle = (e) => {
+                const rect = container.getBoundingClientRect();
+                const touch = Array.from(e.touches).find(t => t.clientX >= rect.left && t.clientX <= rect.right);
+                if (!touch) return;
+                const dx = touch.clientX - (rect.left + rect.width/2);
+                const dy = touch.clientY - (rect.top + rect.height/2);
+                const dist = Math.min(50, Math.sqrt(dx*dx + dy*dy));
+                const angle = Math.atan2(dy, dx);
+                const px = Math.cos(angle) * dist; const py = Math.sin(angle) * dist;
+                stick.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
+                onUpdate(px/50, py/50);
+            };
+            container.addEventListener('touchmove', e => { e.preventDefault(); handle(e); });
+            container.addEventListener('touchend', () => { stick.style.transform = `translate(-50%, -50%)`; onEnd(); });
+        }
+
+        function update() {
+            if (controlMode === 'pc') {
+                player.speed = (keys['w'] ? 0.07 : 0) + (keys['s'] ? -0.07 : 0);
+                player.strafe = (keys['d'] ? 0.07 : 0) + (keys['a'] ? -0.07 : 0);
+            } else {
+                player.dir += player.rot;
+            }
+            let nx = player.x + Math.cos(player.dir) * player.speed + Math.cos(player.dir + Math.PI/2) * player.strafe;
+            let ny = player.y + Math.sin(player.dir) * player.speed + Math.sin(player.dir + Math.PI/2) * player.strafe;
+            if (world[Math.floor(ny)][Math.floor(nx)] === 0) { player.x = nx; player.y = ny; }
+        }
+
+        function draw() {
+            ctx.fillStyle = "#332c16"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
+            ctx.fillStyle = "#1a1608"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+            const rays = 100, fov = Math.PI/3;
+            for(let i=0; i<rays; i++) {
+                let angle = (player.dir - fov/2) + (i/rays) * fov;
+                let d = 0, hit = false;
+                while(!hit && d < 14) {
+                    d += 0.1;
+                    if(world[Math.floor(player.y + Math.sin(angle)*d)][Math.floor(player.x + Math.cos(angle)*d)] === 1) hit = true;
+                }
+                let h = canvas.height / (d * Math.cos(angle - player.dir));
+                let c = Math.max(0, 190 - d*15);
+                ctx.fillStyle = `rgb(${c}, ${c*0.9}, ${c*0.4})`;
+                ctx.fillRect(i*(canvas.width/rays), (canvas.height-h)/2, (canvas.width/rays)+1, h);
+            }
+        }
+
+        function loop() { if(!gameRunning) return; update(); draw(); requestAnimationFrame(loop); }
+        window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    </script>
+</body>
+</html>
